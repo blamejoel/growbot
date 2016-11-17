@@ -24,55 +24,69 @@
 #define PHASES_PER_STEP 64
 
 // Movement defines
+#define STOP  0
 #define FWD   1
 #define BWD   2
 #define LEFT  3
 #define RIGHT 4
 
-// Half Step
-/* const unsigned char m1Phase[] = {A1, A1|B1, B1, B1|C1, C1, C1|D1, D1}; */
-/* const unsigned char m2Phase[] = {A2, A2|B2, B2, B2|C2, C2, C2|D2, D2}; */
+// Set movement - 1:fwd, 2:bwd, 3:left, 4:right;
+unsigned char MoveDirection(unsigned char cmd) {
+  static unsigned char ctrl;
+  if (cmd == 0) {
+    ctrl = cmd;
+  }
+  else if (cmd && (cmd == 0x01 || cmd == 0x02 || cmd == 0x04 || cmd == 0x08)) {
+    ctrl = cmd;
+  }
+  return ctrl;
+}
 
-// Full Step
-const unsigned char m1Phase[] = {A1|B1,B1|C1,C1|D1,D1|A1};
-const unsigned char m2Phase[] = {A2|B2,B2|C2,C2|D2,D2|A2};
-
-// ctrl byte - 1:fwd, 2:bwd, 3:left, 4:right;
-unsigned char ctrl;
+// Demo Task for FreeRTOS
+#define PERIOD_STEPPER_DEMO  3
 
 enum StepperState {STEPPER_INIT,STEPPER_WAIT,STEPPER_FWD,STEPPER_BWD,
   STEPPER_L,STEPPER_R} stepper_state;
 
 void SetState() {
-    if (ctrl == FWD) {
-      stepper_state = STEPPER_FWD;
-    }
-    else if (ctrl == BWD) {
-      stepper_state = STEPPER_BWD;
-    }
-    else if (ctrl == LEFT) {
-      stepper_state = STEPPER_L;
-    }
-    else if (ctrl == RIGHT) {
-      stepper_state = STEPPER_R;
-    }
-    else {
-      stepper_state = STEPPER_WAIT;
-    }
+  unsigned char ctrl = MoveDirection(-1);
+  if (ctrl == FWD) {
+    stepper_state = STEPPER_FWD;
+  }
+  else if (ctrl == BWD) {
+    stepper_state = STEPPER_BWD;
+  }
+  else if (ctrl == LEFT) {
+    stepper_state = STEPPER_L;
+  }
+  else if (ctrl == RIGHT) {
+    stepper_state = STEPPER_R;
+  }
+  else {
+    stepper_state = STEPPER_WAIT;
+  }
 }
 
-void StepperInit() {
+void StepperDemoInit() {
   stepper_state = STEPPER_INIT;
 }
 
-void StepperTick() {
+void StepperDemoTick() {
   static unsigned char i;
   static unsigned char j;
   static unsigned char totalPhases;
+  // Half Step
+  /* const unsigned char m1Phase[] = {A1, A1|B1, B1, B1|C1, C1, C1|D1, D1}; */
+  /* const unsigned char m2Phase[] = {A2, A2|B2, B2, B2|C2, C2, C2|D2, D2}; */
+
+  // Full Step
+  const unsigned char m1Phase[] = {A1|B1,B1|C1,C1|D1,D1|A1};
+  const unsigned char m2Phase[] = {A2|B2,B2|C2,C2|D2,D2|A2};
+
   //Actions
   switch (stepper_state) {
     case STEPPER_INIT:
-      ctrl = 0;
+      MoveDirection(STOP);
       i = 0;
       j = 0;
       totalPhases = sizeof(m1Phase)/sizeof(m1Phase[0]);
@@ -131,12 +145,12 @@ void StepperTick() {
   }
 }
 
-void StepperTask() {
-  StepperInit();
+void StepperDemoTask() {
+  StepperDemoInit();
   for(;;)
   {
-    StepperTick();
-    vTaskDelay(PERIOD_STEPPER);
+    StepperDemoTick();
+    vTaskDelay(PERIOD_STEPPER_DEMO);
   }
 }
 

@@ -1,8 +1,9 @@
-/*	jgome043_growbot.c - 11/16/2016
+/*	[growbot] main.c - 11/16/2016
  *	Name & E-mail: Joel Gomez - jgome043@ucr.edu
  *	CS Login: jgome043
  *	Partner(s) Name & E-mail:
  *	Lab Section: 022
+ *  uC: ATmega1284P
  *	Exercise Description:
  *
  *
@@ -54,7 +55,7 @@ void DemoTick() {
       break;
     case DEMO_WAIT:
       demo_move = (demo_move >= 3) ? 0 : demo_move + 1;
-      if (ctrl % 2 == 0)
+      if (demo_move % 2 == 0)
         PORTB |= (1<<0);
       else
         PORTB &= ~(1<<0);
@@ -70,7 +71,7 @@ void DemoTick() {
       /* else { */
       /*   demo_move = (demo_move >= 4) ? 0 : demo_move + 1; */
       /* } */
-      ctrl = demo_move;
+      MoveDirection(demo_move);
       break;
     default:
       break;
@@ -100,8 +101,8 @@ void DemoTask() {
 
 void StartSecPulse(unsigned portBASE_TYPE Priority) {
   xTaskCreate(DemoTask, (signed portCHAR *)"DemoTask", configMINIMAL_STACK_SIZE, NULL, Priority, NULL );
-  /* xTaskCreate(StepperTask, (signed portCHAR *)"StepperTask", configMINIMAL_STACK_SIZE, NULL, Priority, NULL ); */
-  xTaskCreate(DistanceTask, (signed portCHAR *)"DistanceTask", configMINIMAL_STACK_SIZE, NULL, Priority, NULL );
+  /* xTaskCreate(StepperDemoTask, (signed portCHAR *)"StepperDemoTask", configMINIMAL_STACK_SIZE, NULL, Priority, NULL ); */
+  /* xTaskCreate(DistanceTask, (signed portCHAR *)"DistanceTask", configMINIMAL_STACK_SIZE, NULL, Priority, NULL ); */
 }
 
 int main(void) {

@@ -77,24 +77,23 @@ unsigned short PingIN() {
 
 
 // Demo Task for FreeRTOS
-#define PERIOD_DISTANCE 50
+#define PERIOD_DISTANCE_DEMO 50
 
 enum DistanceState {DIS_INIT,DIS_WAIT} distance_state;
 
-void DistanceInit() {
+void DistanceDemoInit() {
   distance_state = DIS_INIT;
   EnableDistance();
   /* initUSART(0); */
 }
 
-void DistanceTick() {
-  static unsigned char dist_char;   // data char for USART troubleshooting
+void DistanceDemoTick() {
+  unsigned char distance;
   const unsigned char THRESH = 15;  // distance to trigger demo LED
   const unsigned char LED_PIN = 6;  // LED pin for demo
   //Actions
   switch (distance_state) {
     case DIS_INIT:
-      dist_char = 0;
       break;
     case DIS_WAIT:
       distance = PingCM();
@@ -106,6 +105,7 @@ void DistanceTick() {
         DIST_PORT &= ~(1<<LED_PIN);
       }
       /* if (USART_IsSendReady(0)) { */
+      /*   unsigned char dist_char;   // data char for USART troubleshooting */
       /*   dist_char = (distance > 255) ? 255 : distance; */
       /*   USART_Send(dist_char,0); */
       /* } */
@@ -126,12 +126,12 @@ void DistanceTick() {
   }
 }
 
-void DistanceTask() {
-  DistanceInit();
+void DistanceDemoTask() {
+  DistanceDemoInit();
   for(;;)
   {
-    DistanceTick();
-    vTaskDelay(PERIOD_DISTANCE);
+    DistanceDemoTick();
+    vTaskDelay(PERIOD_DISTANCE_DEMO);
   }
 }
 
