@@ -3,6 +3,7 @@
  *	CS Login: jgome043
  *	Partner(s) Name & E-mail:
  *	Lab Section: 022
+ *  uC: ATmega1284P
  *	Description:
  *
  *

@@ -3,7 +3,10 @@
  *	CS Login: jgome043
  *	Partner(s) Name & E-mail:
  *	Lab Section: 022
+ *  uC: ATmega1284P
  *	Description:
+ *  Uses INT0 and Timer3 to give a distance measurement in cm or in away from
+ *  HC SR04 sensor
  *
  *
  *	I acknowledge all content contained herein, excluding template or example
@@ -22,13 +25,9 @@
 
 #define UNIT_IN 148   // uS/148 = inches
 #define UNIT_CM 58    // uS/58 = centimeters
-#define THRESH 15     // output triggered when distance less than this
 
-enum DistanceState {DIS_INIT,DIS_WAIT} distance_state;
-
-volatile int pulse = 0;
+volatile unsigned short pulse = 0;
 volatile char pulse_flag = 0;
-volatile unsigned short distance;
 
 ISR(INT0_vect) {
   if (pulse_flag == 1) {
@@ -43,6 +42,7 @@ ISR(INT0_vect) {
   }
 }
 
+// Flips the bits we need for this to work, only need to run once
 void EnableDistance() {
   SREG |= (1<<7);       // enable global interrupts
   EIMSK |= (1<<INT0);   // enable external interrupt 0 (PD2)
@@ -56,31 +56,54 @@ void EnableDistance() {
   DIST_REG |= (1<<DIST_TRIGGER); DIST_PORT &= ~(1<<DIST_TRIGGER);
 }
 
+// Triggers a new measurement
+void TriggerPing() {
+    DIST_PORT |= (1<<TRIG_PIN);   // set trigger pin high
+    _delay_us(15); 
+    DIST_PORT &= ~(1<<TRIG_PIN);  // set trigger pin low
+}
+
+// Returns the distance in centimeters
+unsigned short PingCM() {
+  TriggerPing();
+  return pulse/UNIT_CM;
+}
+
+// Returns the distance in inches
+unsigned short PingIN() {
+  TriggerPing();
+  return pulse/UNIT_IN;
+}
+
+
+// Demo Task for FreeRTOS
+#define PERIOD_DISTANCE 50
+
+enum DistanceState {DIS_INIT,DIS_WAIT} distance_state;
+
 void DistanceInit() {
   distance_state = DIS_INIT;
   EnableDistance();
   /* initUSART(0); */
-  distance = 255;
 }
 
 void DistanceTick() {
-  static unsigned char dist_char;
+  static unsigned char dist_char;   // data char for USART troubleshooting
+  const unsigned char THRESH = 15;  // distance to trigger demo LED
+  const unsigned char LED_PIN = 6;  // LED pin for demo
   //Actions
   switch (distance_state) {
     case DIS_INIT:
       dist_char = 0;
       break;
     case DIS_WAIT:
-      DIST_PORT |= (1<<TRIG_PIN);   // set trigger pin high
-      _delay_us(15); 
-      DIST_PORT &= ~(1<<TRIG_PIN);  // set trigger pin low
-      distance = pulse/UNIT_CM;
+      distance = PingCM();
 
       if (distance < THRESH) {
-        DIST_PORT |= (1<<6);
+        DIST_PORT |= (1<<LED_PIN);
       }
       else {
-        DIST_PORT &= ~(1<<6);
+        DIST_PORT &= ~(1<<LED_PIN);
       }
       /* if (USART_IsSendReady(0)) { */
       /*   dist_char = (distance > 255) ? 255 : distance; */
