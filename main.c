@@ -103,7 +103,7 @@ void DemoTask() {
 void StartSecPulse(unsigned portBASE_TYPE Priority) {
   xTaskCreate(DemoTask, (signed portCHAR *)"DemoTask", configMINIMAL_STACK_SIZE, NULL, Priority, NULL );
   xTaskCreate(StepperDemoTask, (signed portCHAR *)"StepperDemoTask", configMINIMAL_STACK_SIZE, NULL, Priority, NULL );
-  /* xTaskCreate(DistanceTask, (signed portCHAR *)"DistanceTask", configMINIMAL_STACK_SIZE, NULL, Priority, NULL ); */
+  xTaskCreate(DistanceDemoTask, (signed portCHAR *)"DistanceDemoTask", configMINIMAL_STACK_SIZE, NULL, Priority, NULL );
 }
 
 int main(void) {
