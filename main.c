@@ -36,7 +36,7 @@
 #include "../../growbot/drivetrain.c"
 #include "../../growbot/distance.c"
 
-#define PERIOD_DEMO 1000
+#define PERIOD_DEMO 2000
 
 enum DemoState {DEMO_INIT,DEMO_WAIT} demo_state;
 
@@ -54,23 +54,24 @@ void DemoTick() {
       pause = 1;
       break;
     case DEMO_WAIT:
-      demo_move = (demo_move >= 3) ? 0 : demo_move + 1;
-      if (demo_move % 2 == 0)
-        PORTB |= (1<<0);
-      else
-        PORTB &= ~(1<<0);
+      /* demo_move = (demo_move >= 4) ? 0 : demo_move + 1; */
+      /* if (demo_move % 2 == 0) */
+      /*   PORTB |= (1<<0); */
+      /* else */
+      /*   PORTB &= ~(1<<0); */
 
       // pause before doing left/right
       /* if ((demo_move == 2) && pause) { */
       /*   demo_move = 0; */
       /*   pause = 0; */
       /* } */
-      /* else if ((demo_move == 0 && !pause)) { */
+      /* else if ((demo_move == 0) && (pause == 0)) { */
       /*   demo_move = 3; */
       /* } */
       /* else { */
       /*   demo_move = (demo_move >= 4) ? 0 : demo_move + 1; */
       /* } */
+      demo_move = (demo_move == 1) ? 4 : 1;
       MoveDirection(demo_move);
       break;
     default:
@@ -101,7 +102,7 @@ void DemoTask() {
 
 void StartSecPulse(unsigned portBASE_TYPE Priority) {
   xTaskCreate(DemoTask, (signed portCHAR *)"DemoTask", configMINIMAL_STACK_SIZE, NULL, Priority, NULL );
-  /* xTaskCreate(StepperDemoTask, (signed portCHAR *)"StepperDemoTask", configMINIMAL_STACK_SIZE, NULL, Priority, NULL ); */
+  xTaskCreate(StepperDemoTask, (signed portCHAR *)"StepperDemoTask", configMINIMAL_STACK_SIZE, NULL, Priority, NULL );
   /* xTaskCreate(DistanceTask, (signed portCHAR *)"DistanceTask", configMINIMAL_STACK_SIZE, NULL, Priority, NULL ); */
 }
 

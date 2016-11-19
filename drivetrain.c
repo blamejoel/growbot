@@ -36,7 +36,7 @@ unsigned char MoveDirection(unsigned char cmd) {
   if (cmd == 0) {
     ctrl = cmd;
   }
-  else if (cmd && (cmd == 0x01 || cmd == 0x02 || cmd == 0x04 || cmd == 0x08)) {
+  else if (cmd && (cmd == 0x01 || cmd == 0x02 || cmd == 0x03 || cmd == 0x04)) {
     ctrl = cmd;
   }
   return ctrl;
