@@ -15,13 +15,13 @@
 #define clr_bit(reg,bit) reg &= ~(1<<bit)
 #define check_bit(reg,bit) (reg&(1<<bit))
 
-#define NRF_DDR   DDRC
-#define NRF_PORT  PORTC
-#define NRF_CE    0       // Chip Enable
-#define NRF_CSN   1       // Chip Select Not  (same function as SS')
-#define NRF_SCK   2       // SPI Clock
-#define NRF_MOSI  3       // SPI Master Output Slave Input
-#define NRF_MISO  4       // SPI Master Input Slave Output
+#define NRF_DDR   DDRB
+#define NRF_PORT  PORTB
+#define NRF_SCK   DDB7    // SPI Clock
+#define NRF_MISO  DDB6    // SPI Master Input Slave Output
+#define NRF_MOSI  DDB5    // SPI Master Output Slave Input
+#define NRF_CSN   DDB4    // Chip Select Not  (same function as SS')
+#define NRF_CE    DDB3    // Chip Enable
 
 /* ------------------------------------------------------------------------- */
 void nrf24_setupPins()
