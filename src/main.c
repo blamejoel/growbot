@@ -38,10 +38,9 @@
 
 // Lib includes
 #include "../../growbot/lib/nrf24L01_plus/gateway/radioPinFunctions.c"
-#include "../../growbot/lib/nrf24L01_plus/nrf24.h"
 #include "../../growbot/lib/nrf24L01_plus/nrf24.c"
 
-#define PERIOD_DEMO 1000
+#define PERIOD_DEMO 10
 
 enum DemoState {DEMO_INIT,DEMO_WAIT} demo_state;
 
@@ -53,11 +52,11 @@ void DemoTick() {
   /* static unsigned char demo_move; */
   static uint8_t data[1] = {0x05};
   /* rx demo */
-  /* uint8_t tx_address[5] = {0xD7,0xD7,0xD7,0xD7,0xD7}; */
-  /* uint8_t rx_address[5] = {0xE7,0xE7,0xE7,0xE7,0xE7}; */
+  uint8_t tx_address[5] = {0xD7,0xD7,0xD7,0xD7,0xD7};
+  uint8_t rx_address[5] = {0xE7,0xE7,0xE7,0xE7,0xE7};
   /* tx demo */
-  uint8_t tx_address[5] = {0xE7,0xE7,0xE7,0xE7,0xE7};
-  uint8_t rx_address[5] = {0xD7,0xD7,0xD7,0xD7,0xD7};
+  /* uint8_t tx_address[5] = {0xE7,0xE7,0xE7,0xE7,0xE7}; */
+  /* uint8_t rx_address[5] = {0xD7,0xD7,0xD7,0xD7,0xD7}; */
 
   //Actions
   switch (demo_state) {
@@ -77,22 +76,22 @@ void DemoTick() {
       /* demo_move = (demo_move == 1) ? 4 : 1; */
       /* MoveDirection(demo_move); */
 
-      /* // nrf24 demo rx */
-      /* if(nrf24_dataReady()) */
-      /* { */
-      /*     nrf24_getData(data); */        
-      /*     // light up LED */
-      /*     if (data[0] == 0x05) { */
-      /*       PORTB |= (1<<0); */
-      /*     } */
-      /*     else if (data[0] == 0x03) { */
-      /*       PORTB &= ~(1<<0); */
-      /*     } */
-      /* } */
+      // nrf24 demo rx
+      if(nrf24_dataReady())
+      {
+          nrf24_getData(data);        
+          // light up LED
+          if (data[0] == 0x05) {
+            PORTB |= (1<<0);
+          }
+          else if (data[0] == 0x03) {
+            PORTB &= ~(1<<0);
+          }
+      }
       
-      // nrf24 demo tx
-      data[0] = (data[0] == 0x03) ? 0x05 : 0x03;
-      nrf24_send(data);   // Automatically goes to TX mode
+      /* // nrf24 demo tx */
+      /* data[0] = (data[0] == 0x03) ? 0x05 : 0x03; */
+      /* nrf24_send(data);   // Automatically goes to TX mode */
       /* while(nrf24_isSending()); // Wait for transmission to end */
 
       break;
