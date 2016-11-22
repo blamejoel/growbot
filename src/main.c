@@ -35,12 +35,9 @@
 #include "../../growbot/config.h"
 #include "../../growbot/drivetrain.c"
 #include "../../growbot/distance.c"
+#include "../../growbot/nrf24l01.c"
 
-// Lib includes
-#include "../../growbot/lib/nrf24L01_plus/gateway/radioPinFunctions.c"
-#include "../../growbot/lib/nrf24L01_plus/nrf24.c"
-
-#define PERIOD_DEMO 10
+#define PERIOD_DEMO 1000
 
 enum DemoState {DEMO_INIT,DEMO_WAIT} demo_state;
 
@@ -50,49 +47,14 @@ void DemoInit() {
 
 void DemoTick() {
   /* static unsigned char demo_move; */
-  static uint8_t data[1] = {0x05};
-  /* rx demo */
-  uint8_t tx_address[5] = {0xD7,0xD7,0xD7,0xD7,0xD7};
-  uint8_t rx_address[5] = {0xE7,0xE7,0xE7,0xE7,0xE7};
-  /* tx demo */
-  /* uint8_t tx_address[5] = {0xE7,0xE7,0xE7,0xE7,0xE7}; */
-  /* uint8_t rx_address[5] = {0xD7,0xD7,0xD7,0xD7,0xD7}; */
-
   //Actions
   switch (demo_state) {
     case DEMO_INIT:
       /* demo_move = 0; */
-      /* init hardware pins */
-      nrf24_init();
-      
-      /* Channel #2 , payload length: 1 */
-      nrf24_config(2,1);
-   
-      /* Set the device addresses */
-      nrf24_tx_address(tx_address);
-      nrf24_rx_address(rx_address);
       break;
     case DEMO_WAIT:
       /* demo_move = (demo_move == 1) ? 4 : 1; */
       /* MoveDirection(demo_move); */
-
-      // nrf24 demo rx
-      if(nrf24_dataReady())
-      {
-          nrf24_getData(data);        
-          // light up LED
-          if (data[0] == 0x05) {
-            PORTB |= (1<<0);
-          }
-          else if (data[0] == 0x03) {
-            PORTB &= ~(1<<0);
-          }
-      }
-      
-      /* // nrf24 demo tx */
-      /* data[0] = (data[0] == 0x03) ? 0x05 : 0x03; */
-      /* nrf24_send(data);   // Automatically goes to TX mode */
-      /* while(nrf24_isSending()); // Wait for transmission to end */
 
       break;
     default:
@@ -124,6 +86,7 @@ void StartSecPulse(unsigned portBASE_TYPE Priority) {
   xTaskCreate(DemoTask, (signed portCHAR *)"DemoTask", configMINIMAL_STACK_SIZE, NULL, Priority, NULL );
   /* xTaskCreate(StepperDemoTask, (signed portCHAR *)"StepperDemoTask", configMINIMAL_STACK_SIZE, NULL, Priority, NULL ); */
   /* xTaskCreate(DistanceDemoTask, (signed portCHAR *)"DistanceDemoTask", configMINIMAL_STACK_SIZE, NULL, Priority, NULL ); */
+  xTaskCreate(nRFDemoTask, (signed portCHAR *)"nRFDemoTask", configMINIMAL_STACK_SIZE, NULL, Priority, NULL );
 }
 
 int main(void) {
