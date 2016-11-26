@@ -32,29 +32,51 @@
 /* #include "usart_ATmega1284.h" */
 
 // Growbot include files
-#include "../../growbot/config.h"
+/* #include "../../growbot/config.h" */
 #include "../../growbot/drivetrain.c"
 #include "../../growbot/distance.c"
-#include "../../growbot/nrf24l01.c"
+/* #include "../../growbot/nrf24l01.c" */
 
-#define PERIOD_DEMO 1000
+#define PERIOD_DEMO 100
 
 enum DemoState {DEMO_INIT,DEMO_WAIT} demo_state;
 
+/* void SendDebug(unsigned char dbug) { */
+/*   if (dbug <= 255) { */
+/*     USART_Send(dbug,0); */
+/*   } */
+/*   else { */
+/*     USART_Send(dbug,0); */
+/*   } */
+/* } */
+
 void DemoInit() {
   demo_state = DEMO_INIT;
+  EnableDistance();
+  /* initUSART(0); */
 }
 
 void DemoTick() {
-  /* static unsigned char demo_move; */
+  static unsigned char demo_move;
+  static unsigned short distance;
   //Actions
   switch (demo_state) {
     case DEMO_INIT:
-      /* demo_move = 0; */
+      demo_move = 1;
       break;
     case DEMO_WAIT:
+      distance = PingCM();
+      /* SendDebug(distance); */
+      if (distance < 30 && distance > 7) {
+        PORTD |= (1<<6);
+        demo_move = 0;
+      }
+      else {
+        PORTD &= ~(1<<6);
+        demo_move = 1;
+      }
       /* demo_move = (demo_move == 1) ? 4 : 1; */
-      /* MoveDirection(demo_move); */
+      MoveDirection(demo_move);
 
       break;
     default:
@@ -84,9 +106,9 @@ void DemoTask() {
 
 void StartSecPulse(unsigned portBASE_TYPE Priority) {
   xTaskCreate(DemoTask, (signed portCHAR *)"DemoTask", configMINIMAL_STACK_SIZE, NULL, Priority, NULL );
-  /* xTaskCreate(StepperDemoTask, (signed portCHAR *)"StepperDemoTask", configMINIMAL_STACK_SIZE, NULL, Priority, NULL ); */
+  xTaskCreate(StepperDemoTask, (signed portCHAR *)"StepperDemoTask", configMINIMAL_STACK_SIZE, NULL, Priority, NULL );
   /* xTaskCreate(DistanceDemoTask, (signed portCHAR *)"DistanceDemoTask", configMINIMAL_STACK_SIZE, NULL, Priority, NULL ); */
-  xTaskCreate(nRFDemoTask, (signed portCHAR *)"nRFDemoTask", configMINIMAL_STACK_SIZE, NULL, Priority, NULL );
+  /* xTaskCreate(nRFDemoTask, (signed portCHAR *)"nRFDemoTask", configMINIMAL_STACK_SIZE, NULL, Priority, NULL ); */
 }
 
 int main(void) {

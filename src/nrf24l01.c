@@ -96,12 +96,12 @@ void nRFDemoTX() {
 void nRFDemoInit() {
   nrf_state = NRF_INIT;
   /* rx demo */
-  /* uint8_t tx_address[5] = {0xD7,0xD7,0xD7,0xD7,0xD7}; */
-  /* uint8_t rx_address[5] = {0xE7,0xE7,0xE7,0xE7,0xE7}; */
+  uint8_t tx_address[5] = {0xD7,0xD7,0xD7,0xD7,0xD7};
+  uint8_t rx_address[5] = {0xE7,0xE7,0xE7,0xE7,0xE7};
 
   /* tx demo */
-  uint8_t tx_address[5] = {0xE7,0xE7,0xE7,0xE7,0xE7};
-  uint8_t rx_address[5] = {0xD7,0xD7,0xD7,0xD7,0xD7};
+  /* uint8_t tx_address[5] = {0xE7,0xE7,0xE7,0xE7,0xE7}; */
+  /* uint8_t rx_address[5] = {0xD7,0xD7,0xD7,0xD7,0xD7}; */
 
   InitRadio(NRF_CH,PL_SIZE);
 
@@ -117,8 +117,8 @@ void nRFDemoTick() {
     case NRF_INIT:
       break;
     case NRF_WAIT:
-      /* nRFDemoRX(); */
-      nRFDemoTX();
+      nRFDemoRX();
+      /* nRFDemoTX(); */
       break;
     default:
       break;

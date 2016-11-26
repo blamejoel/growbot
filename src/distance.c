@@ -25,9 +25,11 @@
 
 #define UNIT_IN 148   // uS/148 = inches
 #define UNIT_CM 58    // uS/58 = centimeters
+#define MAX_TIMING 23200
 
 volatile unsigned short pulse = 0;
 volatile char pulse_flag = 0;
+volatile char overflow_flag = 0;
 
 ISR(INT0_vect) {
   if (pulse_flag == 1) {
@@ -39,6 +41,10 @@ ISR(INT0_vect) {
   if (pulse_flag == 0) {
     TCCR3B |= (1<<CS31);  // enable counter
     pulse_flag = 1;
+    overflow_flag = 0;
+  }
+  if (TCNT3 > MAX_TIMING) {
+    overflow_flag = 1;
   }
 }
 
@@ -65,19 +71,23 @@ void TriggerPing() {
 
 // Returns the distance in centimeters
 unsigned short PingCM() {
+  unsigned short distance;
   TriggerPing();
-  return pulse/UNIT_CM;
+  distance = (overflow_flag) ? MAX_TIMING : pulse/UNIT_CM;
+  return distance;
 }
 
 // Returns the distance in inches
 unsigned short PingIN() {
+  unsigned short distance;
   TriggerPing();
-  return pulse/UNIT_IN;
+  distance = (overflow_flag) ? MAX_TIMING : pulse/UNIT_IN;
+  return distance;
 }
 
 
 // Demo Task for FreeRTOS
-#define PERIOD_DISTANCE_DEMO 50
+#define PERIOD_DISTANCE_DEMO 100
 
 enum DistanceState {DIS_INIT,DIS_WAIT} distance_state;
 
@@ -89,7 +99,7 @@ void DistanceDemoInit() {
 
 void DistanceDemoTick() {
   unsigned char distance;
-  const unsigned char THRESH = 15;  // distance to trigger demo LED
+  const unsigned char THRESH = 20;  // distance to trigger demo LED
   const unsigned char LED_PIN = 6;  // LED pin for demo
   //Actions
   switch (distance_state) {
@@ -97,6 +107,7 @@ void DistanceDemoTick() {
       break;
     case DIS_WAIT:
       distance = PingCM();
+      /* distance = PingIN(); */
 
       if (distance < THRESH) {
         DIST_PORT |= (1<<LED_PIN);
