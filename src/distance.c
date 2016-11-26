@@ -25,7 +25,9 @@
 
 #define UNIT_IN 148   // uS/148 = inches
 #define UNIT_CM 58    // uS/58 = centimeters
-#define MAX_TIMING 23200
+#define MIN_TIMING 406    // ghetto fix for reading ~406 ns when sensor is
+                          // completely unobstructed
+#define MAX_TIMING 23200  // approx time in ns when sensor would read out
 
 volatile unsigned short pulse = 0;
 volatile char pulse_flag = 0;
@@ -44,7 +46,7 @@ ISR(INT0_vect) {
     overflow_flag = 0;
   }
   if (TCNT3 > MAX_TIMING) {
-    overflow_flag = 1;
+    overflow_flag = 1;    // possible overflow detected
   }
 }
 
@@ -73,7 +75,10 @@ void TriggerPing() {
 unsigned short PingCM() {
   unsigned short distance;
   TriggerPing();
-  distance = (overflow_flag) ? MAX_TIMING : pulse/UNIT_CM;
+  // sensor seems to report back ~4-7 cm when completely unobstructed, so
+  // we should probably try to rule this noise out at the cost of really 
+  // close proximities
+  distance = (overflow_flag || pulse < MIN_TIMING) ? MAX_TIMING : pulse/UNIT_CM;
   return distance;
 }
 
@@ -81,13 +86,13 @@ unsigned short PingCM() {
 unsigned short PingIN() {
   unsigned short distance;
   TriggerPing();
-  distance = (overflow_flag) ? MAX_TIMING : pulse/UNIT_IN;
+  distance = (overflow_flag || pulse < MIN_TIMING) ? MAX_TIMING : pulse/UNIT_IN;
   return distance;
 }
 
 
 // Demo Task for FreeRTOS
-#define PERIOD_DISTANCE_DEMO 100
+#define PERIOD_DISTANCE_DEMO 10
 
 enum DistanceState {DIS_INIT,DIS_WAIT} distance_state;
 

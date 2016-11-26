@@ -43,7 +43,7 @@ unsigned char MoveDirection(unsigned char cmd) {
 }
 
 // Demo Task for FreeRTOS
-#define PERIOD_STEPPER_DEMO  3
+#define PERIOD_STEPPER_DEMO  4
 
 enum StepperState {STEPPER_INIT,STEPPER_WAIT,STEPPER_FWD,STEPPER_BWD,
   STEPPER_L,STEPPER_R} stepper_state;
@@ -107,14 +107,14 @@ void StepperDemoTick() {
       i = (i == 0) ? totalPhases-1 : i - 1;
       break;
     case STEPPER_L:
-      // clockwise
-      PORTA = m1Phase[i] | m2Phase[i];
-      i = (i == 0) ? totalPhases-1 : i - 1;
-      break;
-    case STEPPER_R:
       // counter-clockwise
       PORTA = m1Phase[i] | m2Phase[i];
       i = (i == totalPhases-1) ? 0 : i + 1;
+      break;
+    case STEPPER_R:
+      // clockwise
+      PORTA = m1Phase[i] | m2Phase[i];
+      i = (i == 0) ? totalPhases-1 : i - 1;
       break;
     default:
       break;

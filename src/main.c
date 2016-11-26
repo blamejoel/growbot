@@ -35,11 +35,7 @@
 /* #include "../../growbot/config.h" */
 #include "../../growbot/drivetrain.c"
 #include "../../growbot/distance.c"
-/* #include "../../growbot/nrf24l01.c" */
-
-#define PERIOD_DEMO 100
-
-enum DemoState {DEMO_INIT,DEMO_WAIT} demo_state;
+#include "../../growbot/nrf24l01.c"
 
 /* void SendDebug(unsigned char dbug) { */
 /*   if (dbug <= 255) { */
@@ -50,65 +46,246 @@ enum DemoState {DEMO_INIT,DEMO_WAIT} demo_state;
 /*   } */
 /* } */
 
-void DemoInit() {
-  demo_state = DEMO_INIT;
-  EnableDistance();
-  /* initUSART(0); */
+// Shared vars
+static unsigned char ready;   // modified by radio, read by all
+static unsigned char danger;  // modified by collision, read by drive
+
+// Task Periods
+#define PERIOD_COLLISION 150
+#define PERIOD_DRIVE 200
+#define PERIOD_RADIO 100
+
+// Task States
+enum CollisionState {COLL_INIT,COLL_WAIT,COLL_FWD,COLL_FALL} collision_state;
+enum DriveState {DRIVE_INIT,DRIVE_WAIT,DRIVE_FWD,DRIVE_BWD,DRIVE_AVOID} drive_state;
+enum RadioState {RADIO_INIT,RADIO_WAIT} radio_state;
+
+// Radio Communication
+void RadioInit() {
+  radio_state = RADIO_INIT;
+  uint8_t tx_address[5] = {0xD7,0xD7,0xD7,0xD7,0xD7};
+  uint8_t rx_address[5] = {0xE7,0xE7,0xE7,0xE7,0xE7};
+  InitRadio(NRF_CH,PL_SIZE);
+  SetTransmitAddress(tx_address);
+  SetRadioAddress(rx_address);
 }
 
-void DemoTick() {
-  static unsigned char demo_move;
-  static unsigned short distance;
+void RadioTick() {
+  static unsigned char data;
+  const unsigned char START_ROUTINE = 0x01;
+  const unsigned char STOP_ROUTINE = 0x00;
   //Actions
-  switch (demo_state) {
-    case DEMO_INIT:
-      demo_move = 1;
+  switch (radio_state) {
+    case RADIO_INIT:
+      data = 0;
+      ready = 0;
       break;
-    case DEMO_WAIT:
-      distance = PingCM();
-      /* SendDebug(distance); */
-      if (distance < 30 && distance > 7) {
-        PORTD |= (1<<6);
-        demo_move = 0;
+    case RADIO_WAIT:
+      data = GetRadioData();
+      if (data == START_ROUTINE) {
+        ready = 1;
       }
-      else {
-        PORTD &= ~(1<<6);
-        demo_move = 1;
+      else if (data == STOP_ROUTINE) {
+        ready = 0;
       }
-      /* demo_move = (demo_move == 1) ? 4 : 1; */
-      MoveDirection(demo_move);
-
+      else if (data == 0x03) {
+        PORTB |= (1<<0);
+      }
+      else if (data == 0x05) {
+        PORTB &= ~(1<<0);
+      }
       break;
     default:
       break;
   }
   //Transitions
-  switch (demo_state) {
-    case DEMO_INIT:
-      demo_state = DEMO_WAIT;
+  switch (radio_state) {
+    case RADIO_INIT:
+      radio_state = RADIO_WAIT;
       break;
-    case DEMO_WAIT:
+    case RADIO_WAIT:
       break;
     default:
-      demo_state = DEMO_INIT;
+      radio_state = RADIO_INIT;
       break;
   }
 }
 
-void DemoTask() {
-  DemoInit();
+void RadioTask() {
+  RadioInit();
   for(;;)
   {
-    DemoTick();
-    vTaskDelay(PERIOD_DEMO);
+    RadioTick();
+    vTaskDelay(PERIOD_RADIO);
+  }
+}
+
+// Basic Movement
+void DriveInit() {
+  drive_state = DRIVE_INIT;
+}
+
+void DriveTick() {
+  static unsigned char move;
+  static unsigned char cnt;
+  //Actions
+  switch (drive_state) {
+    case DRIVE_INIT:
+      move = STOP;
+      cnt = 0;
+      break;
+    case DRIVE_WAIT:
+      move = STOP;
+      break;
+    case DRIVE_FWD:
+      move = FWD;
+      break;
+    case DRIVE_BWD:
+      move = BWD;
+      break;
+    case DRIVE_AVOID:
+      move = LEFT;
+      break;
+    default:
+      break;
+  }
+  //Transitions
+  switch (drive_state) {
+    case DRIVE_INIT:
+      drive_state = DRIVE_WAIT;
+      break;
+    case DRIVE_WAIT:
+      drive_state = (ready) ? DRIVE_FWD : drive_state;
+      break;
+    case DRIVE_FWD:
+      if (!ready) {
+        drive_state = DRIVE_WAIT;
+      }
+      else if (danger) {
+        drive_state = DRIVE_BWD;
+      }
+      break;
+    case DRIVE_BWD:
+      if (!ready) {
+        drive_state = DRIVE_WAIT;
+      }
+      else if (cnt > 2000/PERIOD_DRIVE) {
+        cnt = 0;
+        drive_state = DRIVE_AVOID;
+      }
+      else {
+        cnt++;
+      }
+      break;
+    case DRIVE_AVOID:
+      if (!ready) {
+        drive_state = DRIVE_WAIT;
+      }
+      else if (!danger && cnt > 4000/PERIOD_DRIVE) {
+        cnt = 0;
+        drive_state = DRIVE_FWD;
+      }
+      else {
+        cnt++;
+      }
+      break;
+    default:
+      drive_state = DRIVE_INIT;
+      break;
+  }
+  MoveDirection(move);
+}
+
+void DriveTask() {
+  DriveInit();
+  for(;;)
+  {
+    DriveTick();
+    vTaskDelay(PERIOD_DRIVE);
+  }
+}
+
+// Collision Avoidance
+void CollisionInit() {
+  collision_state = COLL_INIT;
+  EnableDistance();
+}
+
+void CollisionTick() {
+  static unsigned short distance;
+  static unsigned char cnt;
+  //Actions
+  switch (collision_state) {
+    case COLL_INIT:
+      distance = 0;
+      cnt = 0;
+      break;
+    case COLL_WAIT:
+      break;
+    case COLL_FWD:
+      distance = PingCM();
+      /* SendDebug(distance); */
+      if (distance < 40) {
+        PORTD |= (1<<6);
+        if (cnt > 400/PERIOD_COLLISION) {
+          danger = 1;
+          cnt = 0;
+        }
+        else {
+          cnt++;
+          danger = 0;
+        }
+      }
+      else {
+        danger = 0;
+        PORTD &= ~(1<<6);
+      }
+      break;
+    case COLL_FALL:
+      break;
+    default:
+      break;
+  }
+  //Transitions
+  switch (collision_state) {
+    case COLL_INIT:
+      collision_state = COLL_WAIT;
+      break;
+    case COLL_WAIT:
+      collision_state = (ready) ? COLL_FWD : collision_state;
+      break;
+    case COLL_FWD:
+      collision_state = (ready) ? COLL_FALL : COLL_WAIT;
+      break;
+    case COLL_FALL:
+      collision_state = (ready) ? COLL_FWD : COLL_WAIT;
+      break;
+    default:
+      collision_state = COLL_INIT;
+      break;
+  }
+}
+
+void CollisionTask() {
+  CollisionInit();
+  for(;;)
+  {
+    CollisionTick();
+    vTaskDelay(PERIOD_COLLISION);
   }
 }
 
 void StartSecPulse(unsigned portBASE_TYPE Priority) {
-  xTaskCreate(DemoTask, (signed portCHAR *)"DemoTask", configMINIMAL_STACK_SIZE, NULL, Priority, NULL );
-  xTaskCreate(StepperDemoTask, (signed portCHAR *)"StepperDemoTask", configMINIMAL_STACK_SIZE, NULL, Priority, NULL );
-  /* xTaskCreate(DistanceDemoTask, (signed portCHAR *)"DistanceDemoTask", configMINIMAL_STACK_SIZE, NULL, Priority, NULL ); */
-  /* xTaskCreate(nRFDemoTask, (signed portCHAR *)"nRFDemoTask", configMINIMAL_STACK_SIZE, NULL, Priority, NULL ); */
+  xTaskCreate(DriveTask, (signed portCHAR *)"DriveTask", 
+      configMINIMAL_STACK_SIZE, NULL, Priority, NULL );
+  xTaskCreate(StepperDemoTask, (signed portCHAR *)"StepperDemoTask", 
+      configMINIMAL_STACK_SIZE, NULL, Priority, NULL );
+  /* xTaskCreate(nRFDemoTask, (signed portCHAR *)"nRFDemoTask", */ 
+  /*     configMINIMAL_STACK_SIZE, NULL, Priority, NULL ); */
+  xTaskCreate(RadioTask, (signed portCHAR *)"RadioTask", 
+      configMINIMAL_STACK_SIZE, NULL, Priority, NULL );
+  xTaskCreate(CollisionTask, (signed portCHAR *)"CollisionTask", 
+      configMINIMAL_STACK_SIZE, NULL, Priority, NULL );
 }
 
 int main(void) {

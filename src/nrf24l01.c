@@ -31,12 +31,13 @@
 #define NRF_CH  2   // nRF Channel
 #define PL_SIZE 1   // payload size
 
-uint8_t* GetRadioData() {
+unsigned char GetRadioData() {
   uint8_t data[PL_SIZE];
   if (nrf24_dataReady()) {
     nrf24_getData(data);
   }
-  return data;
+  unsigned char data_char = data[0];
+  return data_char;
 }
 
 uint8_t SendRadioData(uint8_t *data) {
@@ -70,13 +71,13 @@ void SetTransmitAddress(uint8_t *address) {
 enum NRFState {NRF_INIT,NRF_WAIT} nrf_state;
 
 void nRFDemoRX() {
-  uint8_t *data;
+  unsigned char data;
   // light up LED
   data = GetRadioData();
-  if (data[0] == 0x05) {
+  if (data == 0x05) {
     PORTB |= (1<<0);
   }
-  else if (data[0] == 0x03) {
+  else if (data == 0x03) {
     PORTB &= ~(1<<0);
   }
 }
