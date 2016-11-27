@@ -1,71 +1,64 @@
-# import the necessary packages
+from serial import Serial
 from picamera.array import PiRGBArray
 from picamera import PiCamera
-import time
 from collections import deque
 import numpy as np
 import argparse
 import imutils
 import cv2
+import time
 
 # construct the argument parse and parse the arguments
 ap = argparse.ArgumentParser()
-ap.add_argument("-v", "--video", 
-        help="path to the (optional) video file")
 ap.add_argument("-b", "--buffer", type=int, default=32,
         help="max buffer size")
 args = vars(ap.parse_args())
 
-# define the lower and upper boundaries of the "green"
-# ball in the HSV color space
+# start serial port
+usart = Serial('/dev/serial0', 9600, timeout=1)
+
+# verify serial port is open
+if (usart.isOpen() == False):
+    usart.open()
+
+rx_data = 0x00
+
+# flush tx and rx buffers
+usart.flushInput()
+usart.flushOutput()
+
+# define the lower and upper boundaries of the "green" target in the HSV
+# color space
 colorLower = (29, 86, 6)        # green
 colorUpper = (64, 255, 255)     # green
 
-# initialize the list of tracked points, the frame counter,
-# and the coordinate deltas
+# initialize the list of tracked points and the frame counter,
 pts = deque(maxlen=args["buffer"])
 counter = 0
-(dX, dY) = (0, 0)
-direction = ""
 
-# if a video path was not supplied, grab the reference
-# to the webcam
-if not args.get("video", False):
-    # camera = cv2.VideoCapture(0)
-    # initialize the camera and grab a reference to the raw camera capture
-    camera = PiCamera()
-    camera.resolution = (640, 480)
-    camera.framerate = 32
-    rawCapture = PiRGBArray(camera, size=(640, 480))
+# initialize the camera and grab a reference to the raw camera capture
+camera = PiCamera()
+camera.resolution = (640, 480)
+camera.framerate = 32
+rawCapture = PiRGBArray(camera, size=(640, 480))
 
-    # allow the camera to warmup
-    time.sleep(0.1)
-
-
-# otherwise, grab a reference to the video file
-else:
-    camera = cv2.VideoCapture(args["video"])
+# allow the camera to warmup
+time.sleep(0.1)
 
 # keep looping
 while True:
-    # grab the current frame
-    # (grabbed, frame) = camera.read()
-
     # capture frames from the camera
-    for frame0 in camera.capture_continuous(rawCapture, format="bgr", use_video_port=True): 
+    for camFrame in camera.capture_continuous(rawCapture, format="bgr", use_video_port=True): 
+
+        # check for new serial data
+        if usart.inWaiting() != 0:
+            rx_data = usart.read(1)
+        else:
+            rx_data = 0x00
+
         # grab the raw NumPy array representing the image, then initialize the timestamp
         # and occupied/unoccupied text
-        frame = frame0.array
-
-        # show the frame
-        # cv2.imshow("Frame", image)
-        # key = cv2.waitKey(1) & 0xFF
-
-
-        # if we are viewing a video and we did not grab a frame,
-        # then we have reached the end of the video
-        if args.get("video") and not grabbed:
-            break
+        frame = camFrame.array
 
         # resize the frame, blur it, and convert it to the HSV
         # color space
@@ -95,7 +88,6 @@ while True:
             ((x, y), radius) = cv2.minEnclosingCircle(c)
             M = cv2.moments(c)
             center = (int(M["m10"] / M["m00"]), int(M["m01"] / M["m00"]))
-            print('x-pos: {}'.format(center[0]))
 
             # only proceed if the radius meets a minimum size
             if radius > 10:
@@ -106,72 +98,50 @@ while True:
                 cv2.circle(frame, center, 5, (0, 0, 255), -1)
                 pts.appendleft(center)
 
-        # loop over the set of tracked points
-        for i in np.arange(1, len(pts)):
-            # if either of the tracked points are None, ignore
-            # them
-            if pts[i - 1] is None or pts[i] is None:
-                continue
-
-            # check to see if enough points have been accumulated in
-            # the buffer
-            try:
-                pts[-10]
-            except IndexError:
-                continue
-            if counter >= 10 and i == 1 and pts[-10] is not None:
-            # if counter >= 10 and i == 1 and pts[-10] is not None:
-                # compute the difference between the x and y
-                # coordinates and re-initialize the direction
-                # text variables
-                dX = pts[-10][0] - pts[i][0]
-                dY = pts[-10][1] - pts[i][1]
-                (dirX, dirY) = ("", "")
-
-                # ensure there is significant movement in the
-                # x-direction
-                if np.abs(dX) > 20:
-                    dirX = "East" if np.sign(dX) == 1 else "West"
-
-                # ensure there is significant movement in the
-                # y-direction
-                if np.abs(dY) > 20:
-                    dirY = "North" if np.sign(dY) == 1 else "South"
-
-                # handle when both directions are non-empty
-                if dirX != "" and dirY != "":
-                    direction = "{}-{}".format(dirY, dirX)
-
-                # otherwise, only one direction is non-empty
-                else:
-                    direction = dirX if dirX != "" else dirY
-
-            # otherwise, compute the thickness of the line and
-            # draw the connecting lines
-            # thickness = int(np.sqrt(args["buffer"] / float(i + 1)) * 2.5)
-            # cv2.line(frame, pts[i - 1], pts[i], (0, 0, 255), thickness)
-
-        # show the movement deltas and the direction of movement on
-        # the frame
-        cv2.putText(frame, direction, (10, 30), cv2.FONT_HERSHEY_SIMPLEX,
-                0.65, (0, 0, 255), 3)
-        cv2.putText(frame, "dx: {}, dy: {}".format(dX, dY),
-                (10, frame.shape[0] - 10), cv2.FONT_HERSHEY_SIMPLEX,
-                0.35, (0, 0, 255), 1)
+        try:
+            if center[0] > 240 and center[0] < 360:
+                print('Target Centered!')
+            elif center[0] >= 360:
+                print('Rotate Left')
+            elif center[0] <= 240:
+                print('Rotate Right')
+            # show the x,y positions on the frame
+            cv2.putText(frame, "x: {}, y: {}".format(center[0], center[1]),
+                    (10, frame.shape[0] - 10), cv2.FONT_HERSHEY_SIMPLEX,
+                    0.35, (0, 0, 255), 1)
+        except TypeError:
+            pass
+        if center is None:
+            print('Seeking target...')
 
         # show the frame to our screen and increment the frame counter
-        cv2.imshow("Frame", frame)
+        cv2.imshow("Growbot Vision", frame)
         key = cv2.waitKey(1) & 0xFF
         counter += 1
 
         # clear the stream in preparation for the next frame
         rawCapture.truncate(0)
 
+        # check if x position has been requested
+        if rx_data == 0x01:
+            # Target Centered!
+            if center[0] > 240 and center[0] < 360:
+                usart.write(0x03)
+            # Rotate Left
+            elif center[0] >= 360:
+                usart.write(0x02)
+            # Rotate Right
+            elif center[0] <= 240:
+                usart.write(0x01)
+            # Seeking target...
+            else:
+                usart.write(0x00)
+
         # if the 'q' key is pressed, stop the loop
         if key == ord("q"):
             break
     break
 
-# cleanup the camera and close any open windows
-# camera.release()
+# close serial port and any open windows
+usart.close()
 cv2.destroyAllWindows()
