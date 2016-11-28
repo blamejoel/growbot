@@ -28,8 +28,18 @@ usart = serial.Serial(
 if not usart.is_open:
     usart.open()
 
-usart.write(b'\x77')
+# usart.write(b'\x77')
 rx_data = b'\x00'
+
+TARGET_CENTERED = b'\x03'
+TARGET_MISSING  = b'\xFE'
+TARGET_LEFT     = b'\x01'
+TARGET_RIGHT    = b'\x02'
+TARGET_REQUEST  = b'\x11'
+target_status = 'not found'
+last_status = ''
+initial_noise = 0
+NOISE_LEVEL = 3
 
 # flush tx and rx buffers
 usart.flushInput()
@@ -60,12 +70,10 @@ while True:
 
         # check for new serial data
         if usart.in_waiting != 0:
-            print(str(usart.in_waiting) + ' waiting...')
             rx_data = usart.read()
-            print(rx_data)
-            usart.write(rx_data)
+            print('Received: {}'.format(rx_data))
         else:
-            rx_data = b'\x01'
+            rx_data = b'\x00'
 
         # grab the raw NumPy array representing the image, then initialize the timestamp
         # and occupied/unoccupied text
@@ -133,21 +141,44 @@ while True:
         # clear the stream in preparation for the next frame
         rawCapture.truncate(0)
 
+        # update target position
         if center is not None:
-            # check if x position has been requested
-            if rx_data == b'\x01':
-                # Target Centered!
-                if center[0] > 240 and center[0] < 360:
-                    usart.write(b'\x03')
-                # Rotate Left
-                elif center[0] >= 360:
-                    usart.write(b'\x02')
-                # Rotate Right
-                elif center[0] <= 240:
-                    usart.write(b'\x01')
-                # Seeking target...
-                else:
-                    usart.write(b'\x00')
+            # Target Centered!
+            if center[0] > 240 and center[0] < 360:
+                target_status = TARGET_CENTERED
+                if initial_noise < NOISE_LEVEL:
+                    initial_noise += 1
+            # Rotate Left
+            elif center[0] >= 360:
+                target_status = TARGET_LEFT
+                if initial_noise < NOISE_LEVEL:
+                    initial_noise = 0
+            # Rotate Right
+            elif center[0] <= 240:
+                target_status = TARGET_RIGHT
+                if initial_noise < NOISE_LEVEL:
+                    initial_noise = 0
+            # Seeking target...
+            else:
+                target_status = TARGET_MISSING
+                initial_noise = 0
+        # Seeking target...
+        else:
+            target_status = TARGET_MISSING
+            initial_noise = 0
+
+        # check if x position has been requested
+        if rx_data == TARGET_REQUEST:
+            usart.write(target_status)
+            print('Target status requested!')
+            print('Status is {}'.format(target_status))
+
+        # send update if target position has changed
+        elif last_status != target_status and initial_noise >= NOISE_LEVEL:
+            usart.write(target_status)
+            last_status = target_status
+            print('Target status has changed!')
+            print('Status is now {}'.format(target_status))
 
         # if the 'q' key is pressed, stop the loop
         if key == ord("q"):
