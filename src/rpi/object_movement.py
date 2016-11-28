@@ -39,7 +39,7 @@ TARGET_REQUEST  = b'\x11'
 target_status = 'not found'
 last_status = ''
 initial_noise = 0
-NOISE_LEVEL = 5
+NOISE_LEVEL = 2
 
 # flush tx and rx buffers
 usart.flushInput()
@@ -63,6 +63,7 @@ rawCapture = PiRGBArray(camera, size=(640, 480))
 # allow the camera to warmup
 time.sleep(0.1)
 
+print('Ready!')
 # keep looping
 while True:
     # capture frames from the camera
@@ -134,7 +135,7 @@ while True:
             # print('Seeking target...')
 
         # show the frame to our screen and increment the frame counter
-        # cv2.imshow("Growbot Vision", frame)
+        cv2.imshow("Growbot Vision", frame)
         key = cv2.waitKey(1) & 0xFF
         counter += 1
 
