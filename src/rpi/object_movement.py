@@ -39,7 +39,7 @@ TARGET_REQUEST  = b'\x11'
 target_status = 'not found'
 last_status = ''
 initial_noise = 0
-NOISE_LEVEL = 3
+NOISE_LEVEL = 5
 
 # flush tx and rx buffers
 usart.flushInput()
@@ -134,7 +134,7 @@ while True:
             # print('Seeking target...')
 
         # show the frame to our screen and increment the frame counter
-        cv2.imshow("Growbot Vision", frame)
+        # cv2.imshow("Growbot Vision", frame)
         key = cv2.waitKey(1) & 0xFF
         counter += 1
 
@@ -150,12 +150,12 @@ while True:
                     initial_noise += 1
             # Rotate Left
             elif center[0] >= 360:
-                target_status = TARGET_LEFT
+                target_status = TARGET_RIGHT
                 if initial_noise < NOISE_LEVEL:
                     initial_noise = 0
             # Rotate Right
             elif center[0] <= 240:
-                target_status = TARGET_RIGHT
+                target_status = TARGET_LEFT
                 if initial_noise < NOISE_LEVEL:
                     initial_noise = 0
             # Seeking target...
