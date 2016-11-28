@@ -60,9 +60,9 @@ static unsigned char seek;    // modified by target, read by drive
 
 // Task Periods
 #define PERIOD_COLLISION 150
-#define PERIOD_DRIVE 200
+#define PERIOD_DRIVE 100
 #define PERIOD_RADIO 100
-#define PERIOD_TARGET 500
+#define PERIOD_TARGET 100
 
 // Task States
 enum CollisionState {COLL_INIT,COLL_WAIT,COLL_FWD,COLL_FALL} collision_state;
@@ -84,7 +84,7 @@ unsigned char RequestTargetStatus(unsigned char data_in) {
 void TargetInit() {
   // TODO: Change init state back after testing!!!
   /* target_state = TARGET_INIT; */
-  target_state = TARGET_SEEK;
+  target_state = TARGET_ACQ;
   initUSART(0);
 }
 
@@ -102,20 +102,20 @@ void TargetTick() {
     case TARGET_SEEK:
       USART_Send(TARGET_REQUEST,0); // request target position
       data = RequestTargetStatus(data);
-      seek = 0x01;
+      seek = LEFT;
       break;
     case TARGET_ACQ:
       data = RequestTargetStatus(data);
-      seek = 0x00;
+      seek = STOP;
       PORTD |= (1<<5);
       break;
     case TARGET_LOST:
       data = RequestTargetStatus(data);
       if (data == TARGET_LEFT) {
-        seek = 0x01;
+        seek = LEFT;
       }
       else if (data == TARGET_RIGHT) {
-        seek = 0x02;
+        seek = RIGHT;
       }
       break;
     default:
@@ -131,6 +131,10 @@ void TargetTick() {
     case TARGET_SEEK:
       if (data == TARGET_CENTERED) {
         target_state = TARGET_ACQ;
+      }
+      else if (data == TARGET_LEFT || data == TARGET_RIGHT || 
+          data == TARGET_MISSING) {
+        target_state = TARGET_LOST;
       }
       break;
     case TARGET_ACQ:
@@ -249,7 +253,9 @@ void DriveTick() {
       move = STOP;
       break;
     case DRIVE_FWD:
-      move = FWD;
+      // TODO: remove this stop and uncomment FWD
+      /* move = FWD; */
+      move = STOP;
       break;
     case DRIVE_BWD:
       move = BWD;
@@ -258,12 +264,7 @@ void DriveTick() {
       move = LEFT;
       break;
     case DRIVE_SEEK:
-      if (seek == 0x01) {
-        move = LEFT;
-      }
-      else if (seek == 0x02) {
-        move = RIGHT;
-      }
+      move = seek;
       break;
     default:
       break;
@@ -280,7 +281,7 @@ void DriveTick() {
       if (!ready) {
         drive_state = DRIVE_WAIT;
       }
-      else if (seek == 0x01 || seek == 0x02) {
+      else if (seek) {
         drive_state = DRIVE_SEEK;
       }
       else if (danger) {
