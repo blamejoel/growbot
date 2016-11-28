@@ -1,4 +1,3 @@
-from serial import Serial
 from picamera.array import PiRGBArray
 from picamera import PiCamera
 from collections import deque
@@ -7,6 +6,7 @@ import argparse
 import imutils
 import cv2
 import time
+import serial
 
 # construct the argument parse and parse the arguments
 ap = argparse.ArgumentParser()
@@ -15,13 +15,21 @@ ap.add_argument("-b", "--buffer", type=int, default=32,
 args = vars(ap.parse_args())
 
 # start serial port
-usart = Serial('/dev/serial0', 9600, timeout=1)
+usart = serial.Serial(
+        port='/dev/serial0', 
+        baudrate=9600, 
+        parity=serial.PARITY_NONE, 
+        stopbits=serial.STOPBITS_ONE, 
+        bytesize=serial.EIGHTBITS,
+        timeout=1
+        )
 
 # verify serial port is open
-if (usart.isOpen() == False):
+if not usart.is_open:
     usart.open()
 
-rx_data = 0x00
+usart.write(b'\x77')
+rx_data = b'\x00'
 
 # flush tx and rx buffers
 usart.flushInput()
@@ -51,10 +59,13 @@ while True:
     for camFrame in camera.capture_continuous(rawCapture, format="bgr", use_video_port=True): 
 
         # check for new serial data
-        if usart.inWaiting() != 0:
-            rx_data = usart.read(1)
+        if usart.in_waiting != 0:
+            print(str(usart.in_waiting) + ' waiting...')
+            rx_data = usart.read()
+            print(rx_data)
+            usart.write(rx_data)
         else:
-            rx_data = 0x00
+            rx_data = b'\x01'
 
         # grab the raw NumPy array representing the image, then initialize the timestamp
         # and occupied/unoccupied text
@@ -99,20 +110,20 @@ while True:
                 pts.appendleft(center)
 
         try:
-            if center[0] > 240 and center[0] < 360:
-                print('Target Centered!')
-            elif center[0] >= 360:
-                print('Rotate Left')
-            elif center[0] <= 240:
-                print('Rotate Right')
+            # if center[0] > 240 and center[0] < 360:
+            #     print('Target Centered!')
+            # elif center[0] >= 360:
+            #     print('Rotate Left')
+            # elif center[0] <= 240:
+            #     print('Rotate Right')
             # show the x,y positions on the frame
             cv2.putText(frame, "x: {}, y: {}".format(center[0], center[1]),
                     (10, frame.shape[0] - 10), cv2.FONT_HERSHEY_SIMPLEX,
                     0.35, (0, 0, 255), 1)
         except TypeError:
             pass
-        if center is None:
-            print('Seeking target...')
+        # if center is None:
+            # print('Seeking target...')
 
         # show the frame to our screen and increment the frame counter
         cv2.imshow("Growbot Vision", frame)
@@ -122,20 +133,21 @@ while True:
         # clear the stream in preparation for the next frame
         rawCapture.truncate(0)
 
-        # check if x position has been requested
-        if rx_data == 0x01:
-            # Target Centered!
-            if center[0] > 240 and center[0] < 360:
-                usart.write(0x03)
-            # Rotate Left
-            elif center[0] >= 360:
-                usart.write(0x02)
-            # Rotate Right
-            elif center[0] <= 240:
-                usart.write(0x01)
-            # Seeking target...
-            else:
-                usart.write(0x00)
+        if center is not None:
+            # check if x position has been requested
+            if rx_data == b'\x01':
+                # Target Centered!
+                if center[0] > 240 and center[0] < 360:
+                    usart.write(b'\x03')
+                # Rotate Left
+                elif center[0] >= 360:
+                    usart.write(b'\x02')
+                # Rotate Right
+                elif center[0] <= 240:
+                    usart.write(b'\x01')
+                # Seeking target...
+                else:
+                    usart.write(b'\x00')
 
         # if the 'q' key is pressed, stop the loop
         if key == ord("q"):
