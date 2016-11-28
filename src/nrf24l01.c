@@ -31,6 +31,10 @@
 #define NRF_CH  2   // nRF Channel
 #define PL_SIZE 1   // payload size
 
+unsigned char RadioDataReady() {
+  return nrf24_dataReady();
+}
+
 unsigned char GetRadioData() {
   uint8_t data[PL_SIZE];
   if (nrf24_dataReady()) {

@@ -29,7 +29,7 @@
 #include "croutine.h"
 
 // CS122A include files
-/* #include "usart_ATmega1284.h" */
+#include "usart_ATmega1284.h"
 
 // Growbot include files
 /* #include "../../growbot/config.h" */
@@ -49,16 +49,123 @@
 // Shared vars
 static unsigned char ready;   // modified by radio, read by all
 static unsigned char danger;  // modified by collision, read by drive
+static unsigned char seek;    // modified by target, read by drive
+
+// Misc defines
+#define TARGET_REQUEST  0x11
+#define TARGET_CENTERED 0x03
+#define TARGET_MISSING  0xFE
+#define TARGET_LEFT     0x01
+#define TARGET_RIGHT    0x02
 
 // Task Periods
 #define PERIOD_COLLISION 150
 #define PERIOD_DRIVE 200
 #define PERIOD_RADIO 100
+#define PERIOD_TARGET 500
 
 // Task States
 enum CollisionState {COLL_INIT,COLL_WAIT,COLL_FWD,COLL_FALL} collision_state;
-enum DriveState {DRIVE_INIT,DRIVE_WAIT,DRIVE_FWD,DRIVE_BWD,DRIVE_AVOID} drive_state;
+enum DriveState {DRIVE_INIT,DRIVE_WAIT,DRIVE_FWD,DRIVE_BWD,DRIVE_AVOID,DRIVE_SEEK} drive_state;
 enum RadioState {RADIO_INIT,RADIO_WAIT} radio_state;
+enum AcqTargetState {TARGET_INIT,TARGET_WAIT,TARGET_SEEK,TARGET_ACQ,TARGET_LOST} target_state;
+
+// Target Location
+unsigned char RequestTargetStatus(unsigned char data_in) {
+  unsigned char data;
+  if (USART_HasReceived(0)) {
+    data = USART_Receive(0);
+  }
+  else {
+    data = data_in;
+  }
+  return data;
+}
+void TargetInit() {
+  // TODO: Change init state back after testing!!!
+  /* target_state = TARGET_INIT; */
+  target_state = TARGET_SEEK;
+  initUSART(0);
+}
+
+void TargetTick() {
+  static unsigned char data;
+  static unsigned char led = 0;
+  //Actions
+  switch (target_state) {
+    case TARGET_INIT:
+      data = 0;
+      seek = 0;
+      break;
+    case TARGET_WAIT:
+      break;
+    case TARGET_SEEK:
+      USART_Send(TARGET_REQUEST,0); // request target position
+      data = RequestTargetStatus(data);
+      seek = 0x01;
+      break;
+    case TARGET_ACQ:
+      data = RequestTargetStatus(data);
+      seek = 0x00;
+      PORTD |= (1<<5);
+      break;
+    case TARGET_LOST:
+      data = RequestTargetStatus(data);
+      if (data == TARGET_LEFT) {
+        seek = 0x01;
+      }
+      else if (data == TARGET_RIGHT) {
+        seek = 0x02;
+      }
+      break;
+    default:
+      break;
+  }
+  //Transitions
+  switch (target_state) {
+    case TARGET_INIT:
+      target_state = TARGET_WAIT;
+      break;
+    case TARGET_WAIT:
+      break;
+    case TARGET_SEEK:
+      if (data == TARGET_CENTERED) {
+        target_state = TARGET_ACQ;
+      }
+      break;
+    case TARGET_ACQ:
+      if (data == TARGET_LEFT || data == TARGET_RIGHT) {
+        target_state = TARGET_LOST;
+        PORTD &= ~(1<<5);
+      }
+      break;
+    case TARGET_LOST:
+      if (data == TARGET_CENTERED) {
+        target_state = TARGET_ACQ;
+      }
+      break;
+    default:
+      target_state = TARGET_INIT;
+      break;
+  }
+  // TODO: remove this test led stuff
+  led = !led;
+  if (led) {
+    PORTB |= (1<<0);
+  }
+  else {
+    PORTB &= ~(1<<0);
+  }
+}
+
+void TargetTask() {
+  TargetInit();
+  for(;;)
+  {
+    TargetTick();
+    vTaskDelay(PERIOD_TARGET);
+  }
+}
 
 // Radio Communication
 void RadioInit() {
@@ -77,11 +184,15 @@ void RadioTick() {
   //Actions
   switch (radio_state) {
     case RADIO_INIT:
-      data = 0;
+      // TODO: Restore this data...
+      data = START_ROUTINE;
+      /* data = STOP_ROUTINE; */
       ready = 0;
       break;
     case RADIO_WAIT:
-      data = GetRadioData();
+      if (RadioDataReady()) {
+        data = GetRadioData();
+      }
       if (data == START_ROUTINE) {
         ready = 1;
       }
@@ -146,6 +257,14 @@ void DriveTick() {
     case DRIVE_AVOID:
       move = LEFT;
       break;
+    case DRIVE_SEEK:
+      if (seek == 0x01) {
+        move = LEFT;
+      }
+      else if (seek == 0x02) {
+        move = RIGHT;
+      }
+      break;
     default:
       break;
   }
@@ -160,6 +279,9 @@ void DriveTick() {
     case DRIVE_FWD:
       if (!ready) {
         drive_state = DRIVE_WAIT;
+      }
+      else if (seek == 0x01 || seek == 0x02) {
+        drive_state = DRIVE_SEEK;
       }
       else if (danger) {
         drive_state = DRIVE_BWD;
@@ -188,6 +310,9 @@ void DriveTick() {
       else {
         cnt++;
       }
+      break;
+    case DRIVE_SEEK:
+      drive_state = (!seek) ? DRIVE_FWD : drive_state;
       break;
     default:
       drive_state = DRIVE_INIT;
@@ -285,6 +410,8 @@ void StartSecPulse(unsigned portBASE_TYPE Priority) {
   xTaskCreate(RadioTask, (signed portCHAR *)"RadioTask", 
       configMINIMAL_STACK_SIZE, NULL, Priority, NULL );
   xTaskCreate(CollisionTask, (signed portCHAR *)"CollisionTask", 
+      configMINIMAL_STACK_SIZE, NULL, Priority, NULL );
+  xTaskCreate(TargetTask, (signed portCHAR *)"TargetTask", 
       configMINIMAL_STACK_SIZE, NULL, Priority, NULL );
 }
 
