@@ -12,6 +12,7 @@ import serial
 ap = argparse.ArgumentParser()
 ap.add_argument("-b", "--buffer", type=int, default=32,
         help="max buffer size")
+ap.add_argument("-l", action="store_true")
 args = vars(ap.parse_args())
 
 # start serial port
@@ -39,7 +40,8 @@ TARGET_REQUEST  = b'\x11'
 target_status = 'not found'
 last_status = ''
 initial_noise = 0
-NOISE_LEVEL = 2
+NOISE_LEVEL = 3
+RADIUS_SIZE = 20
 
 # flush tx and rx buffers
 usart.flushInput()
@@ -58,6 +60,7 @@ counter = 0
 camera = PiCamera()
 camera.resolution = (640, 480)
 camera.framerate = 32
+camera.rotation = 90
 rawCapture = PiRGBArray(camera, size=(640, 480))
 
 # allow the camera to warmup
@@ -110,7 +113,7 @@ while True:
             center = (int(M["m10"] / M["m00"]), int(M["m01"] / M["m00"]))
 
             # only proceed if the radius meets a minimum size
-            if radius > 10:
+            if radius > RADIUS_SIZE:
                 # draw the circle and centroid on the frame,
                 # then update the list of tracked points
                 cv2.circle(frame, (int(x), int(y)), int(radius),
@@ -133,14 +136,6 @@ while True:
             pass
         # if center is None:
             # print('Seeking target...')
-
-        # show the frame to our screen and increment the frame counter
-        cv2.imshow("Growbot Vision", frame)
-        key = cv2.waitKey(1) & 0xFF
-        counter += 1
-
-        # clear the stream in preparation for the next frame
-        rawCapture.truncate(0)
 
         # update target position
         if center is not None:
@@ -180,6 +175,15 @@ while True:
             last_status = target_status
             print('Target status has changed!')
             print('Status is now {}'.format(target_status))
+
+        # show the frame to our screen and increment the frame counter
+        if args['l']:
+            cv2.imshow("Growbot Vision", frame)
+        key = cv2.waitKey(1) & 0xFF
+        counter += 1
+
+        # clear the stream in preparation for the next frame
+        rawCapture.truncate(0)
 
         # if the 'q' key is pressed, stop the loop
         if key == ord("q"):
