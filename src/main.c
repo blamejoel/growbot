@@ -49,6 +49,8 @@
 static unsigned char ready;   // modified by radio, read by all
 static unsigned char danger;  // modified by collision, read by drive
 static unsigned char seek;    // modified by target, read by drive
+static unsigned char watered; // modified by water, read by radio
+static unsigned char water_low; // modified by water, read by radio
 
 // Misc defines
 #define TARGET_REQUEST  0x11
@@ -77,20 +79,27 @@ void WaterInit() {
 }
 
 void WaterTick() {
+  const unsigned char VERIFY_TIME = 2000/PERIOD_WATER;
+  const unsigned char WATER_TIME = 5000/PERIOD_WATER;
   const unsigned char LOW_WATER = 0x80;
   unsigned char water_data[1];
-  unsigned char water_low = (~PINC & 0x80);
+  water_low = (~PINC & 0x80);
+  /* unsigned char water_low = (~PINC & 0x80); */
+  static unsigned char cnt;
   //Actions
   switch (water_state) {
     case WATER_INIT:
       cnt = 0;
+      watered = 0;
       water_data[0] = 0;
       break;
     case WATER_WAIT:
-      water_data[0] = (water_low) ? : LOW_WATER : 0;
-      SendWaterData(water_data);
+      water_data[0] = (water_low) ? LOW_WATER : 0;
+      SendRadioData(water_data);
       break;
     case WATER_PLANT:
+      water_data[0] = (water_low) ? LOW_WATER : 0;
+      SendRadioData(water_data);
       break;
     default:
       break;
@@ -101,8 +110,28 @@ void WaterTick() {
       water_state = WATER_WAIT;
       break;
     case WATER_WAIT:
+      if (cnt > VERIFY_TIME && !seek && danger && !watered) {
+        water_state = WATER_PLANT;
+        PORTC |= (1<<0);
+        cnt = 0;
+      }
+      else if (!seek && danger && !watered){
+        cnt = (cnt > 250) ? 0 : cnt + 1;
+      }
+      else {
+        cnt = 0;
+      }
       break;
     case WATER_PLANT:
+      if ((cnt > WATER_TIME) || water_low) {
+        watered = 1;
+        water_state = WATER_WAIT;
+        PORTC &= ~(1<<0);
+        cnt = 0;
+      }
+      else {
+        cnt = (cnt > 250) ? 0 : cnt + 1;
+      }
       break;
     default:
       water_state = WATER_INIT;
@@ -142,7 +171,7 @@ void TargetTick() {
   switch (target_state) {
     case TARGET_INIT:
       data = 0;
-      seek = 0;
+      seek = LEFT;
       cnt = 0;
       break;
     case TARGET_WAIT:
@@ -234,19 +263,13 @@ void RadioInit() {
 
 void RadioTick() {
   static unsigned char data;
-  static unsigned char cnt;
-  const unsigned char LOW_WATER = 0x80;
   const unsigned char START_ROUTINE = 0x01;
-  const unsigned char STOP_ROUTINE = 0x00;
-  unsigned char water_data[1];
-  unsigned char water_low = (~PINC & 0x80);
+  const unsigned char STOP_ROUTINE = 0x02;
   //Actions
   switch (radio_state) {
     case RADIO_INIT:
       data = STOP_ROUTINE;
       ready = 0;
-      cnt = 0;
-      water_data[0] = 0;
       break;
     case RADIO_WAIT:
       if (RadioDataReady()) {
@@ -255,6 +278,7 @@ void RadioTick() {
       if (data == START_ROUTINE) {
         ready = 1;
       }
+      /* else if (data == STOP_ROUTINE || watered || water_low) { */
       else if (data == STOP_ROUTINE) {
         ready = 0;
       }
@@ -263,13 +287,6 @@ void RadioTick() {
       }
       else {
         PORTB &= ~(1<<0);
-      }
-      if (cnt > 1000/PERIOD_RADIO) {
-        water_data[0] = (water_low) ? : LOW_WATER : 0;
-        SendRadioData(water_data);
-      }
-      else {
-        cnt = (cnt > 250) ? 0 : cnt + 1;
       }
       break;
     default:
@@ -484,15 +501,18 @@ void StartSecPulse(unsigned portBASE_TYPE Priority) {
       configMINIMAL_STACK_SIZE, NULL, Priority, NULL );
   xTaskCreate(TargetTask, (signed portCHAR *)"TargetTask", 
       configMINIMAL_STACK_SIZE, NULL, Priority, NULL );
+  xTaskCreate(WaterTask, (signed portCHAR *)"WaterTask", 
+      configMINIMAL_STACK_SIZE, NULL, Priority, NULL );
 }
 
 int main(void) {
   // Inputs, enable pull-up
   /* DDRB = 0x00; PORTB=0xFF; */
+  DDRC = 0x0F; PORTC = 0xF0;
   // Outputs
-  DDRA = 0xFF; PORTA=0x00;
-  DDRB = 0xFF; PORTB=0x00;
-  DDRD = 0xFF; PORTD=0x00;
+  DDRA = 0xFF; PORTA = 0x00;
+  DDRB = 0xFF; PORTB = 0x00;
+  DDRD = 0xFF; PORTD = 0x00;
   //Start Tasks
   StartSecPulse(1);
   //RunSchedular

@@ -64,7 +64,7 @@ void RadioTick() {
   static unsigned char low_water;
   const unsigned char LOW_WATER = 0x80;
   const unsigned char START_ROUTINE = 0x01;
-  const unsigned char STOP_ROUTINE = 0x00;
+  const unsigned char STOP_ROUTINE = 0x02;
   unsigned char btn = (~PIND & 0x80);
   //Actions
   switch (radio_state) {
@@ -93,12 +93,12 @@ void RadioTick() {
       radio_state = RADIO_WAIT;
       break;
     case RADIO_WAIT:
-      if (btn && !data[0]) {
+      if (btn && data[0] == STOP_ROUTINE) {
         data[0] = START_ROUTINE;
         SendRadioData(data);
         PORTA |= (1<<0);
       }
-      else if (btn && data[0]) {
+      else if (btn && data[0] == START_ROUTINE) {
         data[0] = STOP_ROUTINE;
         SendRadioData(data);
         PORTA &= ~(1<<0);
