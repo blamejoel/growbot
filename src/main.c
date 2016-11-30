@@ -62,12 +62,62 @@ static unsigned char seek;    // modified by target, read by drive
 #define PERIOD_DRIVE 100
 #define PERIOD_RADIO 100
 #define PERIOD_TARGET 100
+#define PERIOD_WATER 1000
 
 // Task States
 enum CollisionState {COLL_INIT,COLL_WAIT,COLL_FWD,COLL_FALL} collision_state;
 enum DriveState {DRIVE_INIT,DRIVE_WAIT,DRIVE_FWD,DRIVE_BWD,DRIVE_AVOID,DRIVE_SEEK} drive_state;
 enum RadioState {RADIO_INIT,RADIO_WAIT} radio_state;
 enum AcqTargetState {TARGET_INIT,TARGET_WAIT,TARGET_SEEK,TARGET_ACQ,TARGET_LOST} target_state;
+enum WaterPumpState {WATER_INIT,WATER_WAIT,WATER_PLANT} water_state;
+
+// Water Pump
+void WaterInit() {
+  water_state = WATER_INIT;
+}
+
+void WaterTick() {
+  const unsigned char LOW_WATER = 0x80;
+  unsigned char water_data[1];
+  unsigned char water_low = (~PINC & 0x80);
+  //Actions
+  switch (water_state) {
+    case WATER_INIT:
+      cnt = 0;
+      water_data[0] = 0;
+      break;
+    case WATER_WAIT:
+      water_data[0] = (water_low) ? : LOW_WATER : 0;
+      SendWaterData(water_data);
+      break;
+    case WATER_PLANT:
+      break;
+    default:
+      break;
+  }
+  //Transitions
+  switch (water_state) {
+    case WATER_INIT:
+      water_state = WATER_WAIT;
+      break;
+    case WATER_WAIT:
+      break;
+    case WATER_PLANT:
+      break;
+    default:
+      water_state = WATER_INIT;
+      break;
+  }
+}
+
+void WaterTask() {
+  WaterInit();
+  for(;;)
+  {
+    WaterTick();
+    vTaskDelay(PERIOD_WATER);
+  }
+}
 
 // Target Location
 unsigned char RequestTargetStatus(unsigned char data_in) {
