@@ -12,6 +12,7 @@
  *	code, is my own original work.
  */
 
+#define F_CPU 8000000UL // Assume uC operates at 8MHz
 #include <util/delay.h>
 
 #define NRF_DDR   DDRB

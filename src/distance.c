@@ -25,7 +25,8 @@
 
 #define UNIT_IN 148   // uS/148 = inches
 #define UNIT_CM 58    // uS/58 = centimeters
-#define MIN_TIMING 406    // ghetto fix for reading ~406 ns when sensor is
+#define MIN_TIMING 0    // ghetto fix for reading ~406 ns when sensor is
+/* #define MIN_TIMING 406    // ghetto fix for reading ~406 ns when sensor is */
                           // completely unobstructed
 #define MAX_TIMING 23200  // approx time in ns when sensor would read out
 

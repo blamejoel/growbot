@@ -32,7 +32,6 @@
 #include "usart_ATmega1284.h"
 
 // Growbot include files
-/* #include "../../growbot/config.h" */
 #include "../../growbot/drivetrain.c"
 #include "../../growbot/distance.c"
 #include "../../growbot/nrf24l01.c"
@@ -82,20 +81,19 @@ unsigned char RequestTargetStatus(unsigned char data_in) {
   return data;
 }
 void TargetInit() {
-  // TODO: Change init state back after testing!!!
-  /* target_state = TARGET_INIT; */
-  target_state = TARGET_ACQ;
+  target_state = TARGET_INIT;
   initUSART(0);
 }
 
 void TargetTick() {
   static unsigned char data;
-  static unsigned char led = 0;
+  static unsigned char cnt;
   //Actions
   switch (target_state) {
     case TARGET_INIT:
       data = 0;
       seek = 0;
+      cnt = 0;
       break;
     case TARGET_WAIT:
       break;
@@ -105,9 +103,16 @@ void TargetTick() {
       seek = LEFT;
       break;
     case TARGET_ACQ:
+      if (cnt > 500/PERIOD_TARGET) {
+        USART_Send(TARGET_REQUEST,0); // request target position
+        cnt = 0;
+      }
+      else {
+        cnt++;
+      }
       data = RequestTargetStatus(data);
       seek = STOP;
-      PORTD |= (1<<5);
+      PORTB |= (1<<1);
       break;
     case TARGET_LOST:
       data = RequestTargetStatus(data);
@@ -127,6 +132,7 @@ void TargetTick() {
       target_state = TARGET_WAIT;
       break;
     case TARGET_WAIT:
+      target_state = (ready) ? TARGET_SEEK : target_state;
       break;
     case TARGET_SEEK:
       if (data == TARGET_CENTERED) {
@@ -140,7 +146,10 @@ void TargetTick() {
     case TARGET_ACQ:
       if (data == TARGET_LEFT || data == TARGET_RIGHT) {
         target_state = TARGET_LOST;
-        PORTD &= ~(1<<5);
+        PORTB &= ~(1<<1);
+      }
+      else if (data == TARGET_MISSING) {
+        target_state = TARGET_SEEK;
       }
       break;
     case TARGET_LOST:
@@ -151,14 +160,6 @@ void TargetTick() {
     default:
       target_state = TARGET_INIT;
       break;
-  }
-  // TODO: remove this test led stuff
-  led = !led;
-  if (led) {
-    PORTB |= (1<<0);
-  }
-  else {
-    PORTB &= ~(1<<0);
   }
 }
 
@@ -183,15 +184,19 @@ void RadioInit() {
 
 void RadioTick() {
   static unsigned char data;
+  static unsigned char cnt;
+  const unsigned char LOW_WATER = 0x80;
   const unsigned char START_ROUTINE = 0x01;
   const unsigned char STOP_ROUTINE = 0x00;
+  unsigned char water_data[1];
+  unsigned char water_low = (~PINC & 0x80);
   //Actions
   switch (radio_state) {
     case RADIO_INIT:
-      // TODO: Restore this data...
-      data = START_ROUTINE;
-      /* data = STOP_ROUTINE; */
+      data = STOP_ROUTINE;
       ready = 0;
+      cnt = 0;
+      water_data[0] = 0;
       break;
     case RADIO_WAIT:
       if (RadioDataReady()) {
@@ -203,11 +208,18 @@ void RadioTick() {
       else if (data == STOP_ROUTINE) {
         ready = 0;
       }
-      else if (data == 0x03) {
+      if (ready) {
         PORTB |= (1<<0);
       }
-      else if (data == 0x05) {
+      else {
         PORTB &= ~(1<<0);
+      }
+      if (cnt > 1000/PERIOD_RADIO) {
+        water_data[0] = (water_low) ? : LOW_WATER : 0;
+        SendRadioData(water_data);
+      }
+      else {
+        cnt = (cnt > 250) ? 0 : cnt + 1;
       }
       break;
     default:
@@ -253,9 +265,12 @@ void DriveTick() {
       move = STOP;
       break;
     case DRIVE_FWD:
-      // TODO: remove this stop and uncomment FWD
-      /* move = FWD; */
-      move = STOP;
+      if (danger) {
+        move = STOP;
+      }
+      else {
+        move = FWD;
+      }
       break;
     case DRIVE_BWD:
       move = BWD;
@@ -264,7 +279,8 @@ void DriveTick() {
       move = LEFT;
       break;
     case DRIVE_SEEK:
-      move = seek;
+      move = (cnt % 2 == 0) ? seek : STOP;
+      cnt = (cnt > 250) ? 0 : cnt + 1;
       break;
     default:
       break;
@@ -285,7 +301,8 @@ void DriveTick() {
         drive_state = DRIVE_SEEK;
       }
       else if (danger) {
-        drive_state = DRIVE_BWD;
+        // TODO: uncomment this once we know what to do?
+        /* drive_state = DRIVE_BWD; */
       }
       break;
     case DRIVE_BWD:
@@ -313,7 +330,12 @@ void DriveTick() {
       }
       break;
     case DRIVE_SEEK:
-      drive_state = (!seek) ? DRIVE_FWD : drive_state;
+      if (!ready) {
+        drive_state = DRIVE_WAIT;
+      }
+      else if (!seek) {
+        drive_state = DRIVE_FWD;
+      }
       break;
     default:
       drive_state = DRIVE_INIT;
@@ -351,20 +373,19 @@ void CollisionTick() {
     case COLL_FWD:
       distance = PingCM();
       /* SendDebug(distance); */
-      if (distance < 40) {
-        PORTD |= (1<<6);
+      if (distance < 10) {
+        PORTB |= (1<<2);
         if (cnt > 400/PERIOD_COLLISION) {
           danger = 1;
           cnt = 0;
         }
         else {
           cnt++;
-          danger = 0;
         }
       }
       else {
         danger = 0;
-        PORTD &= ~(1<<6);
+        PORTB &= ~(1<<2);
       }
       break;
     case COLL_FALL:
@@ -378,13 +399,14 @@ void CollisionTick() {
       collision_state = COLL_WAIT;
       break;
     case COLL_WAIT:
-      collision_state = (ready) ? COLL_FWD : collision_state;
+      /* collision_state = (ready) ? COLL_FWD : collision_state; */
+      collision_state = COLL_FWD;
       break;
     case COLL_FWD:
-      collision_state = (ready) ? COLL_FALL : COLL_WAIT;
+      /* collision_state = (ready) ? COLL_FALL : COLL_WAIT; */
       break;
     case COLL_FALL:
-      collision_state = (ready) ? COLL_FWD : COLL_WAIT;
+      /* collision_state = (ready) ? COLL_FWD : COLL_WAIT; */
       break;
     default:
       collision_state = COLL_INIT;
@@ -406,8 +428,6 @@ void StartSecPulse(unsigned portBASE_TYPE Priority) {
       configMINIMAL_STACK_SIZE, NULL, Priority, NULL );
   xTaskCreate(StepperDemoTask, (signed portCHAR *)"StepperDemoTask", 
       configMINIMAL_STACK_SIZE, NULL, Priority, NULL );
-  /* xTaskCreate(nRFDemoTask, (signed portCHAR *)"nRFDemoTask", */ 
-  /*     configMINIMAL_STACK_SIZE, NULL, Priority, NULL ); */
   xTaskCreate(RadioTask, (signed portCHAR *)"RadioTask", 
       configMINIMAL_STACK_SIZE, NULL, Priority, NULL );
   xTaskCreate(CollisionTask, (signed portCHAR *)"CollisionTask", 
@@ -421,10 +441,8 @@ int main(void) {
   /* DDRB = 0x00; PORTB=0xFF; */
   // Outputs
   DDRA = 0xFF; PORTA=0x00;
-  // 1111 1011  0000 0100
-  /* DDRD = 0xFB; PORTD=0x04; */
-  DDRD = 0xFF; PORTD=0x00;
   DDRB = 0xFF; PORTB=0x00;
+  DDRD = 0xFF; PORTD=0x00;
   //Start Tasks
   StartSecPulse(1);
   //RunSchedular
